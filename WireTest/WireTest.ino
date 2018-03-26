@@ -27,9 +27,10 @@ char warningMessage_1[7] = {'$', 'M', 'W', 'L', 'D', 'T', ','};   // $MWLDT,
 char warningMessage_2[7] = {'$', 'M', 'W', 'F', 'C', 'W', ','};   // $MWFCW,
 char warningMessage_3[5] = {'A', 'T', '$', 'P', 'D'};             // AT$PD=21;LDW:1<0x0D><0x0A>
 
-unsigned char Period[3] = {0, 0, 0};
-unsigned char Pos[2] = {0, 0};
-unsigned char Neg[2] = {0, 0};
+unsigned char tempPositiveVal = 0;
+unsigned char tempNegativeVal = 0;
+unsigned char positiveVal = 0;
+unsigned char negativeVal = 0;
 
 void setup()
 {
@@ -160,9 +161,10 @@ void checkSwitchStatus()
     buzzerCount = 0;
 
     // Other reset
-    Period[0] = 0, Period[1] = 0, Period[2] = 0;
-    Pos[0] = 0, Pos[1] = 0;
-    Neg[0] = 0, Neg[1] = 0;
+    tempPositiveVal = 0;
+    tempNegativeVal = 0;
+    positiveVal = 0;
+    negativeVal = 0;
 
     // record new value
     buzzerSwitchStatus = newBuzzerSwitchStatus;
@@ -184,6 +186,34 @@ void sendGPSData()
   
     Serial.println("$GPGGA,160530.00,2404.04359,N,12025.99974,E,1,06,2.28,-13.3,M,16.1,M,,*4E");
     Serial1.println("$GPGGA,160530.00,2404.04359,N,12025.99974,E,1,06,2.28,-13.3,M,16.1,M,,*4E");
+
+
+    // {test +
+//    // $GPGGA
+//    Serial.println("$GPGGA,121252.000,3937.3032,N,11611.6046,E,1,05,2.0,45.9,M,-5.7,M,,0000*77 (1)");
+//    Serial1.println("$GPGGA,121252.000,3937.3032,N,11611.6046,E,1,05,2.0,45.9,M,-5.7,M,,0000*77 (1)");
+//
+//    // $GPRMC
+//    Serial.println("$GPRMC,121252.000,A,3958.3032,N,11629.6046,E,15.15,359.95,070306,,,A*54 (2)");
+//    Serial1.println("$GPRMC,121252.000,A,3958.3032,N,11629.6046,E,15.15,359.95,070306,,,A*54 (2)");
+//
+//    // GPVTG
+//    Serial.println("$GPVTG,199.62,T,,M,53.712,N,99.475,K,A*3C (3)");
+//    Serial1.println("$GPVTG,199.62,T,,M,53.712,N,99.475,K,A*3C (3)");
+//
+//    // $GPGGA
+//    Serial.println("$GPGGA,121253.000,3937.3090,N,11611.6057,E,1,06,1.2,44.6,M,-5.7,M,,0000*72 (4)");
+//    Serial1.println("$GPGGA,121253.000,3937.3090,N,11611.6057,E,1,06,1.2,44.6,M,-5.7,M,,0000*72 (4)");
+//
+//    // $GPGSA
+//    Serial.println("$GPGSA,A,3,01,07,08,11,09,16,27,30,22,28,,,1.11,0.66,0.89*0E (5)");
+//    Serial1.println("$GPGSA,A,3,01,07,08,11,09,16,27,30,22,28,,,1.11,0.66,0.89*0E (5)");
+//
+//    // $GPGSV
+//    Serial.println("$GPGSV,4,2,13,09,10,222,31,11,84,335,35,16,13,104,27,17,08,255,30*70 (6)");
+//    Serial1.println("$GPGSV,4,2,13,09,10,222,31,11,84,335,35,16,13,104,27,17,08,255,30*70 (6)");
+    // test -}
+    
     Serial.println("----------------------------------------------------------------------");
 
     // GPS LED
@@ -291,67 +321,59 @@ void receiveWarning()
 
 void checkFrequencyRange(float lowValue, float highValue, int sensorVal)
 {
+  // 67 count ~ 167 count
   float lowerBound = ((1 / highValue) * 1000 / DELAY_TIME);
   float upperBound = ((1/ lowValue) * 1000 / DELAY_TIME);
 
   // Count
   if (sensorVal == LOW)
   {
-    Neg[0] = Neg[0] + 1;
-    if (Pos[0] > 0)
-      Pos[1] = 1;     
+    tempNegativeVal += 1;
+    
+    if (tempPositiveVal > 0)
+    {
+      positiveVal = tempPositiveVal;
+      tempPositiveVal = 0;
+    }
   }
-  else // HIGH
+  else
   {
-    Pos[0] = Pos[0] + 1;
-    if (Neg[0] > 0)
-      Neg[1] = 1;
+    tempPositiveVal += 1;
+    
+    if (tempNegativeVal > 0) 
+    {
+      negativeVal = tempNegativeVal;
+      tempNegativeVal = 0;
+    }
   }
 
   // Clear data
-  if (Pos[0] > upperBound)
+  if (tempNegativeVal > upperBound) // > 167 count
   {
-    Pos[0]= 0;
-    Period[0]= 0; 
+    tempNegativeVal = 0;
+    negativeVal = 0;
   }
-  if (Neg[0] > upperBound)
+  if (tempPositiveVal > upperBound) // > 167 count
   {
-    Neg[0]= 0;
-    Period[1]= 0; 
-  }
-
-  // Record count information for HIGH
-  if (Pos[1] == 1)
-  {
-//    Serial.print('%');
-//    Serial.println(Pos[0], DEC);
-    Period[0] = Pos[0]; 
-    Pos[0] = 0;
-    Pos[1] = 0; 
+    tempPositiveVal = 0;
+    positiveVal = 0;
   }
 
-  // Record count information for LOW
-  if (Neg[1] == 1)
-  {
-//    Serial.print('%');
-//    Serial.println(Neg[0], DEC);
-    Period[1] = Neg[0];
-    Neg[0] = 0;
-    Neg[1] = 0;
-  }
-
-  // Check frequency range
   checkFrequencyCount++;
-  if (checkFrequencyCount >= 10) // 100 ms
+  if (checkFrequencyCount >= 10) // 100 ms 檢查一次
   {
-    Period[2] = Period[0] + Period[1];
+    unsigned char sum = negativeVal + positiveVal;
+    Serial.print("negativeVal = ");
+    Serial.println(negativeVal);
+    Serial.print("positiveVal = ");
+    Serial.println(positiveVal);
     
-    if ((Period[2] >= lowerBound) && (Period[2] <= upperBound))
+    if ((sum >= lowerBound) && (sum <= upperBound))
     {
       Serial.println("Success: Get direction light");
       Serial.print('%');
       Serial.println('0');
-//      Serial.println(Period[2], DEC);
+//      Serial.println(sum, DEC);
       digitalWrite(DIRECTION_LIGHT_LED_OUTPIN, HIGH);
     }
     else
@@ -359,7 +381,7 @@ void checkFrequencyRange(float lowValue, float highValue, int sensorVal)
       Serial.println("Failed: Get direction light");
       Serial.print('%');
       Serial.println('1');
-//      Serial.println(Period[2], DEC);
+//      Serial.println(sum, DEC); 
       digitalWrite(DIRECTION_LIGHT_LED_OUTPIN, LOW);
     }
 
